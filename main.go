@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -10,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	pgx "github.com/jackc/pgx/v4"
 )
@@ -20,12 +20,8 @@ var (
 	dburl = flag.String("database", "", "database url")
 )
 
-func walkPath(path string, conn *pgx.Conn) error {
-	filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-
+func walkPath(root string, conn *pgx.Conn) error {
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if !info.IsDir() && strings.HasSuffix(info.Name(), ".sql") {
 			f, err := os.Open(path)
 			if err != nil {
@@ -33,17 +29,19 @@ func walkPath(path string, conn *pgx.Conn) error {
 			}
 			defer f.Close()
 
+			now := time.Now()
 			blocks, err := extractBlocks(f)
 			if err != nil {
 				return fmt.Errorf("error extracting statement blocks: %v", err)
 			}
 			if err = rundb(blocks, conn); err != nil {
-				return fmt.Errorf("error running sql file %s: %v", f.Name(), err)
+				return fmt.Errorf("error running file %s: %v", info.Name(), err)
 			}
+			fmt.Printf("%s(%v)\n", info.Name(), time.Since(now))
 		}
 		return nil
 	})
-	return nil
+	return err
 }
 
 func runFile(filename string, conn *pgx.Conn) error {
@@ -53,48 +51,37 @@ func runFile(filename string, conn *pgx.Conn) error {
 	}
 	defer f.Close()
 
+	now := time.Now()
+	if !strings.HasSuffix(f.Name(), ".sql") {
+		return fmt.Errorf("file lacks .sql extension")
+	}
+
 	blocks, err := extractBlocks(f)
 	if err != nil {
 		return fmt.Errorf("error extracting statement blocks: %v", err)
 	}
 
 	if err = rundb(blocks, conn); err != nil {
-		return fmt.Errorf("error running sql file %s: %v", f.Name(), err)
+		stat, _ := f.Stat()
+		return fmt.Errorf("error running file %s: %v", stat.Name(), err)
 	}
-
+	fmt.Printf("%s(%v)\n", f.Name(), time.Since(now))
 	return nil
 }
 
-func extractBlocks(f *os.File) ([][]byte, error) {
+func extractBlocks(f *os.File) ([]byte, error) {
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("error reading file: %v", err)
 	}
-
-	splitted := bytes.Split(data, []byte(";"))
-	return splitted, nil
+	return data, nil
 }
 
-func rundb(blocks [][]byte, conn *pgx.Conn) error {
-	b := &pgx.Batch{}
-	for _, block := range blocks {
-		b.Queue(string(block))
+func rundb(blocks []byte, conn *pgx.Conn) error {
+	if _, err := conn.Exec(context.Background(), string(blocks)); err != nil {
+		return err
 	}
-
-	var err error
-	results := conn.SendBatch(context.Background(), b)
-
-	for i := 0; i < b.Len(); i++ {
-		if _, err = results.Exec(); err != nil {
-			return fmt.Errorf("error executing statement %s: %v", string(blocks[i]), err)
-		}
-	}
-
 	return nil
-}
-
-func getConn(url string) (*pgx.Conn, error) {
-	return pgx.Connect(context.Background(), url)
 }
 
 func main() {
