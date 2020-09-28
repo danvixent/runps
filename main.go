@@ -16,7 +16,7 @@ import (
 
 var (
 	path  = flag.String("path", "", "path containing multiple sql files to run")
-	file  = flag.String("file", ".", "path to one sql file to run")
+	file  = flag.String("file", "", "path to one sql file to run")
 	dburl = flag.String("database", "", "database url")
 )
 
