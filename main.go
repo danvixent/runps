@@ -43,7 +43,7 @@ func runFile(file string, conn *pgx.Conn) error {
 	// read all file bytes
 	bytes, err := ioutil.ReadFile(file)
 	if err != nil {
-		return fmt.Errorf("error reading fileJ: %v", err)
+		return fmt.Errorf("error reading file: %v", err)
 	}
 
 	// extract the file name, eliminiating the absolute path
@@ -51,7 +51,7 @@ func runFile(file string, conn *pgx.Conn) error {
 
 	// exceute the file on conn
 	if _, err := conn.Exec(context.Background(), string(bytes)); err != nil {
-		return fmt.Errorf("error running file %s: %v", file, err)
+		return fmt.Errorf("error running %s: %v", file, err)
 	}
 
 	fmt.Printf("%s(%v)\n", file, time.Since(now)) // log time taken to process this file
