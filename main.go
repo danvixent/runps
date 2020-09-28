@@ -54,7 +54,7 @@ func runFile(file string, conn *pgx.Conn) error {
 		return fmt.Errorf("error running %s: %v", file, err)
 	}
 
-	fmt.Printf("%s(%v)\n", file, time.Since(now)) // log time taken to process this file
+	fmt.Printf("%s (%v)\n", file, time.Since(now)) // log time taken to process this file
 	return nil
 }
 
